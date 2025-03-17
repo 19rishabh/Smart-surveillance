@@ -1,7 +1,7 @@
 # Path to the dataset
 path: ../dataset  # dataset root dir
-train: images/train  # train images (relative to 'path') 4000 images
-val: images/train  # val images (relative to 'path') 156 images
+train: images/train  # train images (relative to 'path')
+val: images/train  # val images (relative to 'path')
 test:  # test images (optional)
 
 nc: 4

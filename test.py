@@ -5,10 +5,10 @@ import cv2
 model = YOLO("runs/detect/train/weights/best.pt")  # Path to the best trained model
 
 # Test on a single image
-results = model("fire.jpg", save=True, conf=0.35)  # Replace "test.jpg" with your test image
+results = model("fire.jpg", save=True, conf=0.35)  
 
 # Show the results
-print(results)  # Print detected objects
+print(results)  
 
 
 
