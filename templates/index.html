@@ -1,0 +1,341 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Surveillance System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .dashboard-card {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+        .card-header {
+            background-color: #292929;
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            border-radius: 8px 8px 0 0;
+        }
+        .feed-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            background: #000;
+            min-height: 400px; /* Ensure space for the video */
+        }
+        .video-feed {
+            width: 100%;
+            border-radius: 8px;
+        }
+        .alert-item {
+            background-color: #292929;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #dc3545;
+        }
+        .alert-weapon {
+            border-left: 4px solid #dc3545; /* Red */
+        }
+        .alert-fire {
+            border-left: 4px solid #fd7e14; /* Orange */
+        }
+        .alert-speed {
+            border-left: 4px solid #ffc107; /* Yellow */
+        }
+        .alert-timestamp {
+            color: #aaa;
+            font-size: 0.8rem;
+        }
+        .stats-box {
+            background-color: #292929;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        .stat-label {
+            color: #aaa;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 1px;
+        }
+        .top-bar {
+            background-color: #1e1e1e;
+            padding: 10px 20px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 20px;
+        }
+        .logo {
+            font-weight: bold;
+            font-size: 1.4rem;
+            color: #fff;
+        }
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .status-active {
+            background-color: #28a745;
+        }
+        .status-inactive {
+            background-color: #dc3545;
+        }
+        .feed-error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #dc3545;
+        }
+        .detection-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .weapon-icon {
+            color: #dc3545;
+        }
+        .fire-icon {
+            color: #fd7e14;
+        }
+        .speed-icon {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col">
+                    <span class="logo">Advanced Surveillance System</span>
+                </div>
+                <div class="col text-end">
+                    <span class="current-time" id="current-time"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Video Feed Column -->
+            <div class="col-md-8">
+                <div class="dashboard-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <span class="status-indicator" id="feed-status"></span>
+                            Live Surveillance Feed
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-outline-light" id="toggleDetection">
+                                Toggle
+                            </button>
+                        </div>
+                    </div>
+                    <div class="feed-container">
+                        <img src="{{ url_for('video_feed') }}" class="video-feed" id="video-feed" onerror="handleFeedError()">
+                        <div class="feed-error d-none" id="feed-error">
+                            <i class="fas fa-exclamation-triangle fa-3x mb-3"></i>
+                            <h5>Video Feed Error</h5>
+                            <p>Unable to connect to camera. Please check your connection.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dashboard Column -->
+            <div class="col-md-4">
+                <!-- Detection Stats -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Detection Statistics</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-4">
+                                <div class="stats-box">
+                                    <div class="detection-icon">
+                                        <i class="fas fa-car"></i>
+                                    </div>
+                                    <div class="stat-value" id="vehicle-count">0</div>
+                                    <div class="stat-label">Vehicles</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stats-box">
+                                    <div class="detection-icon weapon-icon">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                    </div>
+                                    <div class="stat-value" id="weapon-count">0</div>
+                                    <div class="stat-label">Weapons</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="stats-box">
+                                    <div class="detection-icon fire-icon">
+                                        <i class="fas fa-fire"></i>
+                                    </div>
+                                    <div class="stat-value" id="fire-count">0</div>
+                                    <div class="stat-label">Fires</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Alerts -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Threat Alerts</h5>
+                    </div>
+                    <div class="card-body" id="alerts-container">
+                        <p class="text-muted">No alerts detected</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/js/all.min.js"></script>
+    <script>
+        // Update time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Feed status indicator
+        let feedActive = true;
+        const feedStatus = document.getElementById('feed-status');
+        
+        function updateFeedStatus() {
+            if (feedActive) {
+                feedStatus.classList.add('status-active');
+                feedStatus.classList.remove('status-inactive');
+            } else {
+                feedStatus.classList.add('status-inactive');
+                feedStatus.classList.remove('status-active');
+            }
+        }
+        
+        function handleFeedError() {
+            feedActive = false;
+            updateFeedStatus();
+            document.getElementById('feed-error').classList.remove('d-none');
+            document.getElementById('video-feed').classList.add('d-none');
+        }
+        
+        // Retry video feed connection
+        function retryVideoFeed() {
+            const videoFeed = document.getElementById('video-feed');
+            videoFeed.src = "{{ url_for('video_feed') }}?t=" + new Date().getTime();
+            videoFeed.classList.remove('d-none');
+            document.getElementById('feed-error').classList.add('d-none');
+            feedActive = true;
+            updateFeedStatus();
+        }
+        
+        // Initial status update
+        updateFeedStatus();
+
+        // Fetch detection data
+        function updateDetectionData() {
+            fetch('/api/detection_data')
+                .then(response => response.json())
+                .then(data => {
+                    // Update detection stats
+                    document.getElementById('vehicle-count').textContent = data.vehicles;
+                    document.getElementById('weapon-count').textContent = data.weapons;
+                    document.getElementById('fire-count').textContent = data.fires;
+                    
+                    // Update alerts
+                    const alertsContainer = document.getElementById('alerts-container');
+                    
+                    if (data.alerts.length === 0) {
+                        alertsContainer.innerHTML = '<p class="text-muted">No alerts detected</p>';
+                    } else {
+                        alertsContainer.innerHTML = '';
+                        data.alerts.forEach(alert => {
+                            let alertClass = 'alert-item';
+                            let icon = '';
+                            
+                            // Determine alert type for styling
+                            if (alert.type.includes('WEAPON')) {
+                                alertClass += ' alert-weapon';
+                                icon = '<i class="fas fa-exclamation-triangle me-2"></i>';
+                            } else if (alert.type.includes('FIRE') || alert.type.includes('SMOKE')) {
+                                alertClass += ' alert-fire';
+                                icon = '<i class="fas fa-fire me-2"></i>';
+                            } else if (alert.type.includes('OVERSPEEDING')) {
+                                alertClass += ' alert-speed';
+                                icon = '<i class="fas fa-tachometer-alt me-2"></i>';
+                            }
+                            
+                            alertsContainer.innerHTML += `
+                                <div class="${alertClass}">
+                                    <div class="d-flex justify-content-between">
+                                        <strong>${icon}${alert.type}</strong>
+                                        <span class="alert-timestamp">${alert.timestamp}</span>
+                                    </div>
+                                    <div>${alert.details}</div>
+                                </div>
+                            `;
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching detection data:', error);
+                    // Retry video feed if there's an error
+                    if (feedActive && Math.random() < 0.2) { // 20% chance to retry on error
+                        retryVideoFeed();
+                    }
+                });
+        }
+        
+        // Update data every 2 seconds
+        setInterval(updateDetectionData, 2000);
+        updateDetectionData();
+        
+        // Toggle detection button
+        document.getElementById('toggleDetection').addEventListener('click', function() {
+            fetch('/api/toggle_detection')
+                .then(response => response.json())
+                .then(data => {
+                    const isRunning = data.status === 'running';
+                    this.textContent = isRunning ? 'Stop Detection' : 'Start Detection';
+                    this.classList.toggle('btn-outline-light', !isRunning);
+                    this.classList.toggle('btn-outline-danger', isRunning);
+                    
+                    // Update status and retry video feed if needed
+                    feedActive = isRunning;
+                    updateFeedStatus();
+                    if (isRunning) {
+                        retryVideoFeed();
+                    }
+                })
+                .catch(error => console.error('Error toggling detection:', error));
+        });
+    </script>
+</body>
+</html>

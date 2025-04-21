@@ -228,7 +228,7 @@ if __name__ == "__main__":
     )
     
     # Calibrate for high-angle camera (adjust these values based on your setup)
-    detector.calibrate(known_distance_meters=20)  # Increased from default
+    detector.calibrate(known_distance_meters=17)  # Increased from default
     detector.camera_height_factor = 1.3  # correction factor
     
     # Run the detection
