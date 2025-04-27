@@ -50,6 +50,9 @@
         .alert-speed {
             border-left: 4px solid #ffc107; /* Yellow */
         }
+        .alert-criminal {
+            border-left: 4px solid #8b00ff; /* Purple */
+        }
         .alert-timestamp {
             color: #aaa;
             font-size: 0.8rem;
@@ -117,6 +120,16 @@
         .speed-icon {
             color: #ffc107;
         }
+        .criminal-icon {
+            color: #8b00ff;
+        }
+        .settings-row {
+            padding: 10px 0;
+            border-bottom: 1px solid #333;
+        }
+        .settings-row:last-child {
+            border-bottom: none;
+        }
     </style>
 </head>
 <body>
@@ -158,6 +171,31 @@
                         </div>
                     </div>
                 </div>
+                
+                <!-- System Settings Card -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">System Settings</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="settings-row d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Face Recognition</strong>
+                                <div class="text-muted small">Detect and identify known faces</div>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="toggleFaceRecognition" checked>
+                            </div>
+                        </div>
+                        <div class="settings-row d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>Face Database</strong>
+                                <div class="text-muted small" id="face-db-status">0 faces loaded</div>
+                            </div>
+                            <button class="btn btn-sm btn-outline-light" id="reloadFaces">Reload</button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <!-- Dashboard Column -->
@@ -169,7 +207,7 @@
                     </div>
                     <div class="card-body">
                         <div class="row">
-                            <div class="col-4">
+                            <div class="col-6 col-md-3 col-lg-6 col-xl-3">
                                 <div class="stats-box">
                                     <div class="detection-icon">
                                         <i class="fas fa-car"></i>
@@ -178,7 +216,7 @@
                                     <div class="stat-label">Vehicles</div>
                                 </div>
                             </div>
-                            <div class="col-4">
+                            <div class="col-6 col-md-3 col-lg-6 col-xl-3">
                                 <div class="stats-box">
                                     <div class="detection-icon weapon-icon">
                                         <i class="fas fa-exclamation-triangle"></i>
@@ -187,13 +225,22 @@
                                     <div class="stat-label">Weapons</div>
                                 </div>
                             </div>
-                            <div class="col-4">
+                            <div class="col-6 col-md-3 col-lg-6 col-xl-3">
                                 <div class="stats-box">
                                     <div class="detection-icon fire-icon">
                                         <i class="fas fa-fire"></i>
                                     </div>
                                     <div class="stat-value" id="fire-count">0</div>
                                     <div class="stat-label">Fires</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3 col-lg-6 col-xl-3">
+                                <div class="stats-box">
+                                    <div class="detection-icon criminal-icon">
+                                        <i class="fas fa-user-secret"></i>
+                                    </div>
+                                    <div class="stat-value" id="criminal-count">0</div>
+                                    <div class="stat-label">Criminals</div>
                                 </div>
                             </div>
                         </div>
@@ -268,6 +315,7 @@
                     document.getElementById('vehicle-count').textContent = data.vehicles;
                     document.getElementById('weapon-count').textContent = data.weapons;
                     document.getElementById('fire-count').textContent = data.fires;
+                    document.getElementById('criminal-count').textContent = data.criminals;
                     
                     // Update alerts
                     const alertsContainer = document.getElementById('alerts-container');
@@ -290,6 +338,9 @@
                             } else if (alert.type.includes('OVERSPEEDING')) {
                                 alertClass += ' alert-speed';
                                 icon = '<i class="fas fa-tachometer-alt me-2"></i>';
+                            } else if (alert.type.includes('CRIMINAL')) {
+                                alertClass += ' alert-criminal';
+                                icon = '<i class="fas fa-user-secret me-2"></i>';
                             }
                             
                             alertsContainer.innerHTML += `
@@ -336,6 +387,40 @@
                 })
                 .catch(error => console.error('Error toggling detection:', error));
         });
+        
+        // Face Recognition Toggle
+        document.getElementById('toggleFaceRecognition').addEventListener('change', function() {
+            fetch('/api/toggle_face_recognition')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Face recognition:', data.status);
+                })
+                .catch(error => console.error('Error toggling face recognition:', error));
+        });
+        
+        // Reload Faces Button
+        document.getElementById('reloadFaces').addEventListener('click', function() {
+            fetch('/api/reload_faces')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('face-db-status').textContent = 
+                        `${data.faces_loaded} faces loaded`;
+                    
+                    // Show brief notification
+                    alert(`Successfully loaded ${data.faces_loaded} faces from database`);
+                })
+                .catch(error => console.error('Error reloading faces:', error));
+        });
+        
+        // Fetch initial face recognition status
+        fetch('/api/face_status')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('toggleFaceRecognition').checked = data.enabled;
+                document.getElementById('face-db-status').textContent = 
+                    `${data.faces_loaded} faces loaded`;
+            })
+            .catch(error => console.error('Error fetching face status:', error));
     </script>
 </body>
 </html>

@@ -1,5 +1,6 @@
-# app.py - Integration with your existing models
-from flask import Flask, render_template, Response, jsonify
+# Modified app.py with face recognition integration
+
+from flask import Flask, render_template, Response, jsonify, request
 import cv2
 import time
 import json
@@ -7,6 +8,8 @@ from datetime import datetime
 from collections import defaultdict
 import threading
 import os
+import face_recognition
+import numpy as np
 
 # Import your custom detection modules
 from overspeeding import OverspeedingDetector
@@ -23,10 +26,49 @@ detection_data = {
     "weapons": 0,
     "fires": 0,
     "speeds": [],
-    "alerts": []
+    "alerts": [],
+    "criminals": 0  # New counter for detected criminals
 }
 processing_thread = None
 running = False
+
+# Face recognition variables
+known_faces_folder = "known_faces"
+known_face_encodings = []
+known_face_names = []
+face_recognition_enabled = True  # Control flag for face recognition
+
+# Load known faces
+def load_known_faces():
+    global known_face_encodings, known_face_names
+    
+    known_face_encodings = []
+    known_face_names = []
+    
+    if not os.path.exists(known_faces_folder):
+        os.makedirs(known_faces_folder)
+        print(f"Created directory: {known_faces_folder}")
+        return
+    
+    for filename in os.listdir(known_faces_folder):
+        if filename.endswith(".png") or filename.endswith(".jpg") or filename.endswith(".jpeg"):
+            image_path = os.path.join(known_faces_folder, filename)
+            
+            try:
+                # Load image and get encodings
+                known_image = face_recognition.load_image_file(image_path)
+                encodings = face_recognition.face_encodings(known_image)
+                
+                if encodings:
+                    known_face_encodings.append(encodings[0])
+                    known_face_names.append(os.path.splitext(filename)[0])  # Name from filename
+                    print(f"Loaded face: {os.path.splitext(filename)[0]}")
+                else:
+                    print(f"Warning: No faces found in {filename}")
+            except Exception as e:
+                print(f"Error loading face from {filename}: {e}")
+    
+    print(f"Loaded {len(known_face_encodings)} known faces")
 
 def get_camera():
     global camera
@@ -62,6 +104,10 @@ def process_surveillance():
             speed_limit=30
         )
         
+        # Load known faces for face recognition
+        print("Loading face recognition database...")
+        load_known_faces()
+        
         models_loaded = True
         print("Models loaded successfully!")
     except Exception as e:
@@ -77,6 +123,7 @@ def process_surveillance():
             continue
         
         processed_frame = frame.copy()
+        criminals_detected = 0  # Reset counter for this frame
         
         # Process with your models if loaded
         if models_loaded:
@@ -152,6 +199,49 @@ def process_surveillance():
                                     "timestamp": datetime.now().strftime("%H:%M:%S")
                                 })
                 
+                # 3. Face recognition (new integration)
+                if face_recognition_enabled and len(known_face_encodings) > 0:
+                    # Convert to RGB (face_recognition expects RGB)
+                    rgb_frame = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+                    
+                    # Detect faces and get encodings
+                    face_locations = face_recognition.face_locations(rgb_frame)
+                    face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
+                    
+                    for face_encoding, face_location in zip(face_encodings, face_locations):
+                        # Compare with known faces
+                        matches = face_recognition.compare_faces(known_face_encodings, face_encoding, tolerance=0.5)
+                        face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+                        best_match_index = np.argmin(face_distances) if len(face_distances) > 0 else None
+                        
+                        name = "Unknown"  # Default label
+                        
+                        if best_match_index is not None and matches[best_match_index]:
+                            name = "Criminal"  # Label only known faces as "Criminal"
+                            criminals_detected += 1
+                            
+                            # Create alert for criminal detection
+                            with lock:
+                                criminal_name = known_face_names[best_match_index]
+                                detection_data["alerts"].append({
+                                    "type": "CRIMINAL DETECTED",
+                                    "details": f"Identified as {criminal_name} - Face match confidence: {1 - face_distances[best_match_index]:.2f}",
+                                    "timestamp": datetime.now().strftime("%H:%M:%S")
+                                })
+                        
+                        # Draw bounding box and label
+                        top, right, bottom, left = face_location
+                        
+                        # Color based on identity (red for criminals, blue for unknown)
+                        color = (0, 0, 255) if name == "Criminal" else (255, 0, 0)
+                        
+                        cv2.rectangle(processed_frame, (left, top), (right, bottom), color, 2)
+                        cv2.putText(processed_frame, name, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 255, 255), 2)
+                
+                # Update criminals count in detection data
+                with lock:
+                    detection_data["criminals"] = criminals_detected
+                
             except Exception as e:
                 print(f"Error in surveillance processing: {e}")
                 import traceback
@@ -217,6 +307,7 @@ def get_detection_data():
             "vehicles": len(detection_data["vehicles"]),
             "weapons": detection_data["weapons"],
             "fires": detection_data["fires"],
+            "criminals": detection_data["criminals"],  # Added criminal count
             "alerts": detection_data["alerts"].copy() if detection_data["alerts"] else []
         }
     return jsonify(data_copy)
@@ -239,10 +330,33 @@ def toggle_detection():
         processing_thread.start()
         return jsonify({"status": "running"})
 
+@app.route('/api/toggle_face_recognition')
+def toggle_face_recognition():
+    global face_recognition_enabled
+    face_recognition_enabled = not face_recognition_enabled
+    return jsonify({"status": "enabled" if face_recognition_enabled else "disabled"})
+
+@app.route('/api/reload_faces')
+def reload_faces():
+    # Reload faces from the known_faces directory
+    load_known_faces()
+    return jsonify({"status": "success", "faces_loaded": len(known_face_names)})
+
+@app.route('/api/face_status')
+def face_status():
+    return jsonify({
+        "enabled": face_recognition_enabled,
+        "faces_loaded": len(known_face_names),
+        "faces": known_face_names
+    })
+
 if __name__ == '__main__':
     try:
         # Initialize the camera before starting the app
         if get_camera() is not None:
+            # Load face recognition database
+            load_known_faces()
+            
             # Start processing thread
             processing_thread = threading.Thread(target=process_surveillance)
             processing_thread.daemon = True
